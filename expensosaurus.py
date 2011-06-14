@@ -14,6 +14,8 @@ help_message = '''
 File is expected as $name, $amount, $description
 Can use # as a comment line'''
 
+TEST = True
+
 
 class Usage(Exception):
 	def __init__(self, msg):
@@ -40,7 +42,10 @@ def main(argv=None):
 		
 		#Just want the one option basically
 		
-		filename = sys.argv[1]
+		if TEST and len(argv) < 2:
+			argv = [argv[0], '/Users/dan/Dropbox/Scripts/expensosaurus/test_expenses.txt']
+		
+		filename = argv[1]
 		runner = Runner(filename)
 		runner.run()
 	
@@ -95,24 +100,28 @@ class Runner:
 	def run(self):
 		f = open(self.filename)
 		contents = f.read()
-		lines = [ln for ln in contents.split('\n') if not ln.startswith('#')]
+		lines = [ln for ln in contents.split('\n') if len(ln) > 5 and not ln.startswith('#')]
 		purchases = [self.parse_line(ln) for ln in lines]
 		#now we have complete list of purchases. go through each purchase and update the amounts for people
 		for purchase in purchases:
 			purchase.purchaser.add_amnt(purchase.cost)
 		#now our people are updated - pass to a method that will figure out what's owed 
-		debts = self.compute_debts(self.people.values())
-		for debt in debts:
-			print debt.to_string()
+		total, avg, debts = self.compute_debts(self.people.values())
+		contents += '\n'
+		contents += 'Total: %s\n' % total
+		contents += 'Avg per person: %s\n' % avg
+		print contents
+		
 
 	def parse_line(self, line):
 		items = line.split(',')
+		print('processing ' + str(items))
 		name = items[0]
 		if name not in self.people.keys():
 			purchaser = Person(name)
 			self.people[purchaser.get_name()] = purchaser
 		else:
-			purchaser = self.people[purchaser]
+			purchaser = self.people[name]
 		cost = items[1]
 		description = items[2]
 		return Purchase(purchaser, cost, description)
@@ -129,12 +138,10 @@ class Runner:
 			sys.exit(1)
 		total = sum(person.amount for person in people)
 		avg = total/float(len(people))
-		print 'total -> ' + str(total)
-		print 'avg -> ' + str(avg)
 		if(len(people) == 2):
 			ower = people[0] if people[0].amount < people[1].amount else people[1]
 			owed = people[0] if ower == people[1] else people[1]
-			return [Debt(ower, owed, owed.amount - avg)]
+			debts = [Debt(ower, owed, owed.amount - avg)]
 		else:#this must mean there are 3 people
 			owers = []
 			owed = []
@@ -145,10 +152,31 @@ class Runner:
 					owed.append(person)
 			if(len(owers) > len(owed)):
 				#2 owers, 1 owed. so each ower pays what they owe, and owed gets it all
-				return [Debt(owers[x], owed[0], avg - owers[x].amount) for x in range(2)]
+				debts =  [Debt(owers[x], owed[0], avg - owers[x].amount) for x in range(2)]
 			else:
 				#1 ower, 2 owed. Ower pays each owed what they deserve
-				return [Debt(owers[0], owed[x], owed[x].amount - avg) for x in range(2)]
+				debts = [Debt(owers[0], owed[x], owed[x].amount - avg) for x in range(2)]
+		return total, avg, debts
+		
+	def send_email(self, subject, text):
+		msg = MIMEMultipart()
+        msg['From'] = tumboxconfig.mailer_email_address
+        msg['To'] = tumboxconfig.mailer_email_address
+        msg['Subject'] = subject
+        
+        msg.attach(MIMEText(text))
+            
+        server = smtplib.SMTP('smtp.gmail.com',587)
+        server.ehlo()  
+        server.starttls()
+        server.ehlo()
+        server.login(tumboxconfig.mailer_email_address, tumboxconfig.mailer_pw)
+        response = server.sendmail(tumboxconfig.mailer_email_address,
+                tumboxconfig.email_address_list,
+                msg.as_string())
+        if len(response) != 0:
+            self._log('Possibly some trouble with emailing: ' +str(response))
+        server.close()
 
 
 if __name__ == "__main__":

@@ -1,0 +1,5 @@
+#ignore project file
+*.tmproj
+
+#and config stuff
+settings.py
