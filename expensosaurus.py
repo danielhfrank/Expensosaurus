@@ -6,8 +6,17 @@ expensosaurus.py
 Created by Daniel Frank on 2011-06-13.
 """
 
+import smtplib
+from email.MIMEMultipart import MIMEMultipart
+from email.MIMEBase import MIMEBase
+from email.MIMEText import MIMEText
+from email import Encoders
+
 import sys
 import getopt
+import time
+import os
+import yaml
 
 
 help_message = '''
@@ -16,6 +25,7 @@ Can use # as a comment line'''
 
 TEST = True
 
+settings = {}
 
 class Usage(Exception):
 	def __init__(self, msg):
@@ -46,7 +56,11 @@ def main(argv=None):
 			argv = [argv[0], '/Users/dan/Dropbox/Scripts/expensosaurus/test_expenses.txt']
 		
 		filename = argv[1]
-		runner = Runner(filename)
+		
+		#load the settings. TODO: make this a cmd line option
+		settings = yaml.load(open('/Users/dan/Dropbox/Scripts/expensosaurus/settings.yaml', 'r'))
+		
+		runner = Runner(filename, settings)
 		runner.run()
 	
 	except Usage, err:
@@ -58,7 +72,6 @@ def main(argv=None):
 #File is expected as $name, $amount, $description
 #Can use # as a comment line
 
-import os
 
 class Purchase:
 
@@ -92,9 +105,10 @@ class Debt:
 
 class Runner:
 
-	def __init__(self, filename):
+	def __init__(self, filename, settings):
 		self.people = {}
 		self.filename = filename
+		self.settings = settings
 
 
 	def run(self):
@@ -110,6 +124,12 @@ class Runner:
 		contents += '\n'
 		contents += 'Total: %s\n' % total
 		contents += 'Avg per person: %s\n' % avg
+		contents += '\n'
+		for debt in debts:
+			contents += debt.to_string() + '\n'
+		date_str = time.strftime("%b %Y")
+		self.save_content(date_str + '.txt', contents)
+		self.email_content('Expense Report for %s' % date_str, contents) 
 		print contents
 		
 
@@ -158,26 +178,32 @@ class Runner:
 				debts = [Debt(owers[0], owed[x], owed[x].amount - avg) for x in range(2)]
 		return total, avg, debts
 		
-	def send_email(self, subject, text):
+	def email_content(self, subject, text):
 		msg = MIMEMultipart()
-        msg['From'] = tumboxconfig.mailer_email_address
-        msg['To'] = tumboxconfig.mailer_email_address
-        msg['Subject'] = subject
-        
-        msg.attach(MIMEText(text))
-            
-        server = smtplib.SMTP('smtp.gmail.com',587)
-        server.ehlo()  
-        server.starttls()
-        server.ehlo()
-        server.login(tumboxconfig.mailer_email_address, tumboxconfig.mailer_pw)
-        response = server.sendmail(tumboxconfig.mailer_email_address,
-                tumboxconfig.email_address_list,
-                msg.as_string())
-        if len(response) != 0:
-            self._log('Possibly some trouble with emailing: ' +str(response))
-        server.close()
+		msg['From'] = self.settings['email']
+		msg['To'] = ','.join(self.settings['recipients'])
+		msg['Subject'] = subject
+		
+		msg.attach(MIMEText(text))
+			
+		server = smtplib.SMTP('smtp.gmail.com',587)
+		server.ehlo()  
+		server.starttls()
+		server.ehlo()
+		server.login(self.settings['email'], self.settings['pw'])
+		response = server.sendmail(self.settings['email'],
+				self.settings['recipients'],
+				msg.as_string())
+		if len(response) != 0:
+			print 'Possibly some trouble with emailing: %s' % response
+		server.close()
 
+	def save_content(self, title, content):
+		date_str = time.strftime("%b %Y") 
+		f = open(self.settings['archive_dir'] + '/' + title, 'w')
+		content = ('Expense Report for %s \n' % date_str) + content
+		f.write(content)
+		f.close
 
 if __name__ == "__main__":
 	sys.exit(main())
