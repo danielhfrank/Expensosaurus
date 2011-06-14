@@ -1,0 +1,4 @@
+#This is a comment
+Dan,26,Movies
+Kimberly,2.50,Popsicle
+Danny,18,Scotch
