@@ -110,6 +110,9 @@ class Person:
 
 	def get_name(self):
 		return self.name
+		
+	def __cmp__(self, other):
+		return self.amount - other.amount
 
 class Debt:
 
@@ -129,7 +132,7 @@ class Runner:
 		for name in settings['names']:
 			self.people[name] = Person(name)
 		self.filename = settings['expense_file']
-		self.settings = settings
+		self.settings = settings		
 
 
 	def run(self):
@@ -171,37 +174,69 @@ class Runner:
 		description = items[2]
 		return Purchase(purchaser, cost, description)
 
-	def compute_debts(self,people):
-		#Should return a list of Debts
-		if(len(people) > 3):
-			#this shit ain't implemented yet!
-			print 'FAIL - too many people!'
-			sys.exit(1)
-		if(len(people) < 2):
-			#this shit doesn't make sense
-			print 'FAIL - less than 2 people, makes no sense'
-			sys.exit(1)
+	# def compute_debts(self,people):
+	# 	#Should return a list of Debts
+	# 	if(len(people) > 3):
+	# 		#this shit ain't implemented yet!
+	# 		print 'FAIL - too many people!'
+	# 		sys.exit(1)
+	# 	if(len(people) < 2):
+	# 		#this shit doesn't make sense
+	# 		print 'FAIL - less than 2 people, makes no sense'
+	# 		sys.exit(1)
+	# 	total = sum(person.amount for person in people)
+	# 	avg = total/float(len(people))
+	# 	if(len(people) == 2):
+	# 		ower = people[0] if people[0].amount < people[1].amount else people[1]
+	# 		owed = people[0] if ower == people[1] else people[1]
+	# 		debts = [Debt(ower, owed, owed.amount - avg)]
+	# 	else:#this must mean there are 3 people
+	# 		owers = []
+	# 		owed = []
+	# 		for person in people:
+	# 			if person.amount < avg:
+	# 				owers.append(person)
+	# 			else:
+	# 				owed.append(person)
+	# 		if(len(owers) > len(owed)):
+	# 			#2 owers, 1 owed. so each ower pays what they owe, and owed gets it all
+	# 			debts =  [Debt(owers[x], owed[0], avg - owers[x].amount) for x in range(2)]
+	# 		else:
+	# 			#1 ower, 2 owed. Ower pays each owed what they deserve
+	# 			debts = [Debt(owers[0], owed[x], owed[x].amount - avg) for x in range(2)]
+	# 	return total, avg, debts
+	
+	def compute_debts(self, people):
 		total = sum(person.amount for person in people)
 		avg = total/float(len(people))
-		if(len(people) == 2):
-			ower = people[0] if people[0].amount < people[1].amount else people[1]
-			owed = people[0] if ower == people[1] else people[1]
-			debts = [Debt(ower, owed, owed.amount - avg)]
-		else:#this must mean there are 3 people
-			owers = []
-			owed = []
-			for person in people:
-				if person.amount < avg:
-					owers.append(person)
-				else:
-					owed.append(person)
-			if(len(owers) > len(owed)):
-				#2 owers, 1 owed. so each ower pays what they owe, and owed gets it all
-				debts =  [Debt(owers[x], owed[0], avg - owers[x].amount) for x in range(2)]
+		debts = []
+		def pop(peoples, avg):
+			#sort, and get people who owe / are owed the most
+			peoples.sort()
+			ower = peoples[0]
+			owed = peoples[-1]
+			amnt = min(avg - ower.amount, owed.amount - avg)#greatest amount that can be paid - one person will become square
+			# ower_amnt = avg - ower.amount
+			# owed_amnt = owed.amount - avg
+			debt = Debt(ower, owed, amnt)
+			ower.amount += amnt #because ower is now paying out this much more
+			owed.amount -= amnt #because is being paid this, to cover part of debt
+			if ower.amount == avg:
+				peoples.remove(ower)
+			elif owed.amount == avg:
+				peoples.remove(owed)
 			else:
-				#1 ower, 2 owed. Ower pays each owed what they deserve
-				debts = [Debt(owers[0], owed[x], owed[x].amount - avg) for x in range(2)]
+				raise Exception('Your math sucks, nobody is square after transaction')
+			print debt.to_string()
+			return Debt, peoples
+		import copy
+		ppl = copy.copy(people)
+		while len(ppl) > 1:
+			debt, ppl = pop(ppl, avg)
+			debts.append(debt)
 		return total, avg, debts
+
+			
 		
 	def email_content(self, subject, text):
 		msg = MIMEMultipart()
