@@ -4,3 +4,6 @@
 #and config stuff
 settings.py
 settings.yaml
+
+#pyc fock you
+*.pyc

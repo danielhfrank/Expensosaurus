@@ -151,7 +151,7 @@ class Runner:
 		date_str = time.strftime("%b %Y")
 		self.save_content(date_str + '.txt', contents)
 		if not TEST:
-			pass#delete the old file, and create a new one
+			open(self.filename, 'w').write('')#delete old file and create a new one
 		# self.email_content('%s Expense Report for %s' % (self.settings['name'],date_str), contents) 
 		print contents
 		
@@ -226,7 +226,7 @@ class Runner:
 	def save_content(self, title, content):
 		date_str = time.strftime("%b %Y") 
 		f = open(self.settings['archive_dir'] + '/' + title, 'w')
-		content = ('%s Expense Report for %s' % (self.settings['name'],date_str)) + content
+		content = ('%s Expense Report for %s\n\n' % (self.settings['name'],date_str)) + content
 		f.write(content)
 		f.close
 
