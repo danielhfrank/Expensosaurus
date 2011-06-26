@@ -21,7 +21,12 @@ import yaml
 
 help_message = '''
 File is expected as $name, $amount, $description
-Can use # as a comment line'''
+Can use # as a comment line
+
+Cmd line usage: first, run -s or --setup : 1 config file - this will create necessary dirs. 
+Assumes that expenses file does not exist yet! Will make sure to make a new one, so we never hit that error
+Then can run with a list of config files as the only args
+'''
 
 TEST = True
 
@@ -36,38 +41,51 @@ def main(argv=None):
 	if argv is None:
 		argv = sys.argv
 	try:
-		# try:
-		# 	opts, args = getopt.getopt(argv[1:], "hf:", ["help", "file="])
-		# except getopt.error, msg:
-		# 	raise Usage(msg)
-		# 	
-		# # option processing
-		# for option, value in opts:
-		# 	# if option == "-v":
-		# 	# 	verbose = True
-		# 	if option in ("-h", "--help"):
-		# 		raise Usage(help_message)
-		# 	if option == "-f":
-		# 		output = value
+		try:
+			opts, args = getopt.getopt(argv[1:], "hs:", ["help", "setup="])
+		except getopt.error, msg:
+			raise Usage(msg)
+			
+		setup_file = None
+		# option processing
+		for option, value in opts:
+			# if option == "-v":
+			# 	verbose = True
+			if option in ("-h", "--help"):
+				raise Usage(help_message)
+			if option in ('-s', '--setup'):
+				setup_file = value
+		
+		if setup_file is not None:
+			settings_dict = yaml.load(open(setup_file, 'r'))
+			sys.exit(setup(settings_dict))
 		
 		#Just want the one option basically
 		
 		if TEST and len(argv) < 2:
-			argv = [argv[0], '/Users/dan/Dropbox/Scripts/expensosaurus/test_expenses.txt']
+			argv = [argv[0], '/Users/dan/Dropbox/Scripts/expensosaurus/settings.yaml']
 		
-		filename = argv[1]
+		settings_files = argv[1:]
 		
-		#load the settings. TODO: make this a cmd line option
-		settings = yaml.load(open('/Users/dan/Dropbox/Scripts/expensosaurus/settings.yaml', 'r'))
+		for settings_file in settings_files:
+			#load the settings.
+			settings = yaml.load(open(settings_file, 'r'))
+			# print settings
+			# sys.exit(1)
 		
-		runner = Runner(filename, settings)
-		runner.run()
+			runner = Runner(settings)
+			runner.run()
 	
 	except Usage, err:
 		print >> sys.stderr, sys.argv[0].split("/")[-1] + ": " + str(err.msg)
 		print >> sys.stderr, "\t for help use --help"
 		return 2
 
+def setup(settings_dict):
+	os.mkdir(settings_dict['archive_dir'])
+	tmp = open(settings_dict['expense_file'], 'a')
+	tmp.write('')
+	tmp.close()
 
 #File is expected as $name, $amount, $description
 #Can use # as a comment line
@@ -101,13 +119,16 @@ class Debt:
 		self.amount = float(amount)
 
 	def to_string(self):
-		return self.ower.name + ' owes ' + self.owed.name + ' ' + str(self.amount)
+		return '%s owes %s $%.2f' % (self.ower.name, self.owed.name, self.amount)
+		# return self.ower.name + ' owes ' + self.owed.name + ' ' + str(self.amount)
 
 class Runner:
 
-	def __init__(self, filename, settings):
+	def __init__(self, settings):
 		self.people = {}
-		self.filename = filename
+		for name in settings['names']:
+			self.people[name] = Person(name)
+		self.filename = settings['expense_file']
 		self.settings = settings
 
 
@@ -123,18 +144,22 @@ class Runner:
 		total, avg, debts = self.compute_debts(self.people.values())
 		contents += '\n'
 		contents += 'Total: %s\n' % total
-		contents += 'Avg per person: %s\n' % avg
+		contents += 'Avg per person: %.2f\n' % avg
 		contents += '\n'
 		for debt in debts:
 			contents += debt.to_string() + '\n'
 		date_str = time.strftime("%b %Y")
 		self.save_content(date_str + '.txt', contents)
-		self.email_content('Expense Report for %s' % date_str, contents) 
+		if not TEST:
+			pass#delete the old file, and create a new one
+		# self.email_content('%s Expense Report for %s' % (self.settings['name'],date_str), contents) 
 		print contents
 		
 
 	def parse_line(self, line):
-		items = line.split(',')
+		items = [x.strip() for x in line.split(',', 2)]
+		if len(items) is not 3:
+			raise Exception('Line could not be parsed, too few items: %s' % line)
 		print('processing ' + str(items))
 		name = items[0]
 		if name not in self.people.keys():
@@ -201,7 +226,7 @@ class Runner:
 	def save_content(self, title, content):
 		date_str = time.strftime("%b %Y") 
 		f = open(self.settings['archive_dir'] + '/' + title, 'w')
-		content = ('Expense Report for %s \n' % date_str) + content
+		content = ('%s Expense Report for %s' % (self.settings['name'],date_str)) + content
 		f.write(content)
 		f.close
 
