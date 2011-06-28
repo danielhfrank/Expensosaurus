@@ -227,8 +227,7 @@ class Runner:
 				peoples.remove(owed)
 			else:
 				raise Exception('Your math sucks, nobody is square after transaction')
-			print debt.to_string()
-			return Debt, peoples
+			return debt, peoples
 		import copy
 		ppl = copy.copy(people)
 		while len(ppl) > 1:
