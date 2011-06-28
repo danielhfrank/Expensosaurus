@@ -3,3 +3,5 @@ Dan,26,Movies
 Kimberly,2.50,Popsicle
 Danny,18,Scotch
 Dan,20.15,Groceries
+Jeff, 30.00, Mad booze
+Luke,1.25, Dinner for like 5 nights
