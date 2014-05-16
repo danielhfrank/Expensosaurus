@@ -42,19 +42,22 @@ def main(argv=None):
 		argv = sys.argv
 	try:
 		try:
-			opts, args = getopt.getopt(argv[1:], "hs:", ["help", "setup="])
+			opts, args = getopt.getopt(argv[1:], "hls:", ["help", "lite", "setup="])
 		except getopt.error, msg:
 			raise Usage(msg)
 			
 		setup_file = None
+		lite = False
 		# option processing
 		for option, value in opts:
 			# if option == "-v":
 			# 	verbose = True
 			if option in ("-h", "--help"):
 				raise Usage(help_message)
-			if option in ('-s', '--setup'):
+	        if option in ('-s', '--setup'):
 				setup_file = value
+            if option in ('l', '--lite'):
+                lite = True
 		
 		if setup_file is not None:
 			settings_dict = yaml.load(open(setup_file, 'r'))
@@ -65,6 +68,10 @@ def main(argv=None):
 		if TEST and len(argv) < 2:
 			argv = [argv[0], '/Users/dan/Dropbox/Scripts/expensosaurus/settings.yaml']
 		
+        if lite:
+            Runner(None, True).run()
+            sys.exit(0)
+        
 		settings_files = argv[1:]
 		
 		for settings_file in settings_files:
@@ -127,18 +134,21 @@ class Debt:
 
 class Runner:
 
-	def __init__(self, settings):
+	def __init__(self, settings, lite=False):
 		self.people = {}
-		for name in settings['names']:
-			self.people[name] = Person(name)
-		self.filename = settings['expense_file']
-		self.settings = settings		
+        if not lite:
+		    for name in settings['names']:
+			    self.people[name] = Person(name)
+		    self.filename = settings['expense_file']
+		    self.settings = settings
+        self.lite = lite
 
 
 	def run(self):
-		f = open(self.filename)
-		contents = f.read()
-		lines = [ln for ln in contents.split('\n') if len(ln) > 5 and not ln.startswith('#')]
+		expenses = open(self.filename, 'r') if not self.lite else sys.stdin
+		lines = [ln for ln in expenses if len(ln) > 5 and not ln.startswith('#')]
+        if not lite:
+            expenses.close()
 		purchases = [self.parse_line(ln) for ln in lines]
 		#now we have complete list of purchases. go through each purchase and update the amounts for people
 		for purchase in purchases:
@@ -152,10 +162,10 @@ class Runner:
 		for debt in debts:
 			contents += debt.to_string() + '\n'
 		date_str = time.strftime("%b %Y")
-		self.save_content(date_str + '.txt', contents)
-		if not TEST:
+		if not (TEST or self.lite):
+            self.save_content(date_str + '.txt', contents)
 			open(self.filename, 'w').write('')#delete old file and create a new one
-		self.email_content('%s Expense Report for %s' % (self.settings['name'],date_str), contents) 
+		    self.email_content('%s Expense Report for %s' % (self.settings['name'],date_str), contents) 
 		print contents
 		
 
@@ -163,7 +173,8 @@ class Runner:
 		items = [x.strip() for x in line.split(',', 2)]
 		if len(items) is not 3:
 			raise Exception('Line could not be parsed, too few items: %s' % line)
-		print('processing ' + str(items))
+        if not self.lite:
+		    print('processing ' + str(items))
 		name = items[0]
 		if name not in self.people.keys():
 			purchaser = Person(name)
@@ -230,6 +241,7 @@ class Runner:
 		content = ('%s Expense Report for %s\n\n' % (self.settings['name'],date_str)) + content
 		f.write(content)
 		f.close
+            
 
 if __name__ == "__main__":
 	sys.exit(main())
